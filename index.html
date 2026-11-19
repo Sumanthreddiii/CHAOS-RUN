@@ -49,7 +49,7 @@
   <h1>CHAOS RUN</h1>
   <p>Enter your email to play</p>
   <input type="text" id="lname" placeholder="Your name (optional)" maxlength="40" autocomplete="name">
-  <input type="email" id="lemail" placeholder="Email address" autocomplete="email" inputmode="email">
+  <input type="text" id="lemail" placeholder="Email address" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false">
   <label><input type="checkbox" id="lconsent"><span>I agree to share my email with the game owner so I can play.</span></label>
   <div id="lerr"></div>
   <button id="lbtn">PLAY</button>
@@ -82,7 +82,7 @@ const OUT12 = ['A boulder got you.','You fell into the void.','The laser got you
 const OUT3  = ['A meteor got you.','Spikes!','You hit a wall.','You fell in the lava.','You hit the spikes.'];
 const NAMES4 = ['GRAVITY FLIP','COIN RUSH','SEESAW','RED LIGHT','GLASS BRIDGE'];
 const HELP4 = ['JUMP flips gravity! Dodge spikes on the floor and ceiling.',
-               'Catch 15 coins before time runs out. Dodge the bombs!',
+               'Catch 18 coins before time runs out. Dodge the bombs!',
                'The plank tips toward you. Stay near the middle!',
                'Run on GREEN. Freeze on RED. Reach the finish line!',
                'Remember the safe glass! A wrong panel breaks.'];
@@ -104,7 +104,7 @@ function loadProgress(){
   }catch(e){}
 }
 function saveProgress(){ try{ localStorage.setItem(progKey(), JSON.stringify({unlocked, levelDone, level, challenge})); }catch(e){} }
-const CEIL = 70, PLANK_Y = GROUND-70, COIN_GOAL = 15;
+const CEIL = 70, PLANK_Y = GROUND-70, COIN_GOAL = 18;
 let gdir = 1, flipReq = 0, pillars = [], pillarIn = 1.2;
 let coins = [], bombs = [], coinIn = 0.4, bombIn = 1.6, score = 0;
 let th = 0, omega = 0, crates = [], crateIn = 2;
@@ -317,7 +317,7 @@ function update(dt){
     if(bombIn <= 0){
       const bx = Math.random() < 0.4 ? Math.max(30, Math.min(W-30, p.x + p.w/2 + (Math.random()*120-60))) : 30 + Math.random()*(W-60);
       bombs.push({x:bx, y:-20, vy:0, boom:0, exploding:false});
-      bombIn = Math.max(0.6, (1.6 - el3*0.025)/D());
+      bombIn = Math.max(0.5, (1.35 - el3*0.025)/D());
     }
     for(const c of coins){
       if(!c.landed){ c.y += 150*dt; if(c.y >= GROUND-12){ c.y = GROUND-12; c.landed = true; } } else c.life -= dt;
@@ -343,13 +343,13 @@ function update(dt){
   if(md === 23){                                   // RED LIGHT, GREEN LIGHT
     lightT -= dt;
     if(lightT <= 0){
-      if(light === 'green'){ light = 'yellow'; lightT = 0.55; }
-      else if(light === 'yellow'){ light = 'red'; lightT = 1.4 + Math.random(); redAge = 0; }
-      else { light = 'green'; lightT = 1.2 + Math.random()*1.0; }
+      if(light === 'green'){ light = 'yellow'; lightT = 0.45; }
+      else if(light === 'yellow'){ light = 'red'; lightT = 1.6 + Math.random(); redAge = 0; }
+      else { light = 'green'; lightT = 1.0 + Math.random()*0.9; }
     }
     if(light === 'red'){
       redAge += dt;
-      if(redAge > 0.18 && (keys.left || keys.right || keys.jump)){ why = 'You moved on red!'; end(false); return; }
+      if(redAge > 0.14 && (keys.left || keys.right || keys.jump)){ why = 'You moved on red!'; end(false); return; }
     }
     for(const h of hurdles){
       if(p.x+p.w-3 > h.x && p.x+3 < h.x+h.w && p.y+p.h-2 > GROUND-h.h){ why = 'You hit a hurdle.'; end(false); return; }
@@ -483,7 +483,7 @@ function makeBridge(){
 }
 function updateBridge(dt){
   for(const pl of plats){
-    if(pl.fragile && pl.alive){ if(player.ride === pl) pl.crack += dt; if(pl.crack > 0.22) pl.alive = false; }
+    if(pl.fragile && pl.alive){ if(player.ride === pl) pl.crack += dt; if(pl.crack > 0.18) pl.alive = false; }
   }
 }
 const clampX = (p,x)=> Math.max(0, Math.min(W-p.w, x));
@@ -503,9 +503,9 @@ function flipStep(dt){                       // GRAVITY FLIP
   pillarIn -= dt;
   if(pillarIn <= 0){
     pillars.push({x:W+10, w:34, h:58, top: Math.random() < 0.5});
-    pillarIn = Math.max(0.95, (1.45 + Math.random()*0.5 - el*0.01)/D());
+    pillarIn = Math.max(0.85, (1.3 + Math.random()*0.5 - el*0.012)/D());
   }
-  const sp = (250 + el*3)*D();
+  const sp = (270 + el*3.5)*D();
   for(const q of pillars){
     q.x -= sp*dt;
     const y0 = q.top ? CEIL : GROUND - q.h;
@@ -529,10 +529,10 @@ function seesawStep(dt){                     // SEESAW
   p.vy += 1500*dt;
   // crates drop onto the plank and shove it
   crateIn -= dt;
-  if(crateIn <= 0){ crates.push({x: cx + (Math.random()*2-1)*250, y:-20, vy:0, hit:false, life:0}); crateIn = Math.max(1.5, (2.6 - el*0.03)/D()); }
+  if(crateIn <= 0){ crates.push({x: cx + (Math.random()*2-1)*250, y:-20, vy:0, hit:false, life:0}); crateIn = Math.max(1.25, (2.2 - el*0.03)/D()); }
   for(const c of crates){
     if(!c.hit){ c.vy += 900*dt; c.y += c.vy*dt; const sy = PLANK_Y + (c.x-cx)*Math.tan(th) - 18;
-      if(c.y >= sy){ c.hit = true; c.y = sy; c.life = 0.5; omega += (c.x < cx ? -1 : 1)*0.8; } }
+      if(c.y >= sy){ c.hit = true; c.y = sy; c.life = 0.5; omega += (c.x < cx ? -1 : 1)*0.95; } }
     else c.life -= dt;
   }
   crates = crates.filter(c => !c.hit || c.life > 0);
@@ -821,7 +821,7 @@ function draw(){
     }
   }
   if(dm === 24){                                                     // GLASS BRIDGE
-    const el = ROUND_TIME - timer, preview = state === 'play' && el < 3.5;
+    const el = ROUND_TIME - timer, preview = state === 'play' && el < 2.8;
     for(const pl of plats){
       if(!pl.alive) continue;
       if(pl === plats[0] || pl.goal){
@@ -1003,9 +1003,9 @@ function queueLead(u){
 }
 function doLogin(){
   const val = id => { const el = document.getElementById(id); return el && el.value ? String(el.value) : ''; };
-  const name = val('lname').trim().slice(0,40), email = val('lemail').trim().toLowerCase();
+  const name = val('lname').trim().slice(0,40), email = val('lemail').replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff]/g,'').replace(/[.,;]+$/,'').toLowerCase();
   const consent = !!(document.getElementById('lconsent') || {}).checked;
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120){ loginErr('Please enter a valid email address.'); return false; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120){ loginErr(email ? 'That email looks wrong: \"'+email.slice(0,60)+'\". Use the form name@example.com' : 'Please type your email address.'); return false; }
   if(!consent){ loginErr('Please tick the box to continue.'); return false; }
   loginErr('');
   user = {name, email};

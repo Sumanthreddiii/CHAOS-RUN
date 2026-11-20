@@ -147,7 +147,7 @@ function reset(){
   notes = []; noteIn = 0.8; hits = 0; misses = 0; laneFlash = [0,0,0];
   stars = []; starIn = 0.5; starScore = 0; fireballs = []; fireIn = 2;
   mines = [{x:200,y:150,vx:80,r:13}];
-  boss = {x:560, w:70, h:64, y:GROUND-64, dir:-1, hp:5, stun:0, speed:80};
+  boss = {x:560, w:70, h:64, y:GROUND-64, dir:-1, hp:5, stun:0, speed:95};
   if(mode() === 30){ balls = [newBall(), newBall()]; }
   why = ''; gdir = 1; flipReq = 0; pillars = []; pillarIn = 1.2;
   coins = []; bombs = []; coinIn = 0.4; bombIn = 1.6; score = 0;
@@ -412,8 +412,8 @@ function update(dt){
     fireIn -= dt;
     if(fireIn <= 0 && boss.stun <= 0){
       const toward = (p.x+p.w/2 < boss.x+boss.w/2) ? -1 : 1;
-      fireballs.push({x:boss.x+boss.w/2, y: Math.random() < 0.25 ? GROUND-62 : GROUND-14, vx: toward*(210 + el3*2)});
-      fireIn = Math.max(1.0, 2.0 - el3*0.02);
+      fireballs.push({x:boss.x+boss.w/2, y: Math.random() < 0.35 ? GROUND-62 : GROUND-14, vx: toward*(245 + el3*2.5)});
+      fireIn = Math.max(0.8, 1.6 - el3*0.02);
     }
     for(const fb of fireballs){
       fb.x += fb.vx*dt;
@@ -425,7 +425,7 @@ function update(dt){
     if(over && boss.stun <= 0){
       if(p.y+p.h <= boss.y+45){                    // feet on the head: stomp when falling, harmless when rising
         if(p.vy > 0){
-          boss.hp--; boss.stun = 1.2; boss.speed *= 1.18; p.vy = -640; p.jumps = 1;
+          boss.hp--; boss.stun = 0.9; boss.speed *= 1.25; p.vy = -640; p.jumps = 1;
           if(boss.hp <= 0){ end(true); return; }
         }
       } else { why = 'The boss got you!'; end(false); return; }

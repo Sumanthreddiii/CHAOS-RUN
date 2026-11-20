@@ -66,7 +66,7 @@ const C = {sky:'#6a2fd0', floor:'#ff8a2a', floorTop:'#ffd23f', player:'#22d3ee',
 const CHALLENGES = ['BOULDER PANIC','FLOOR IS GONE','LASER DODGE','CRAZY PLATFORMS','HAMMER SMASH'];
 const HELP = ['Survive 30 seconds. Dodge the boulders!','Cyan tiles stay safe. Run to them before the rest vanish!','Low laser: JUMP. High laser: STAY DOWN. Survive 30 seconds!','Ride the platforms. They crumble. Stay out of the water!','Watch the swing. Time your run, or jump over the head!'];
 const TILE_W = 100;
-const THEMES = ['#6a2fd0','#0f766e','#9d174d','#1e3a8a','#7c2d12'];   // sky colour changes every level
+const THEMES = ['#6a2fd0','#0f766e','#9d174d','#1e3a8a','#7c2d12','#581c87'];   // sky colour changes every level
 const NAMES2 = ['BOULDER STORM','ICE FLOOR','LASER COMBO','RISING TIDE','HAMMER MAZE'];
 const HELP2 = ['Boulders from BOTH sides, and some bounce!',
                'Slippery ice! Green tiles stay safe, the rest vanish.',
@@ -95,9 +95,16 @@ const HELP5 = ['Giant balls bounce everywhere. Dodge them for 30 seconds!',
                'You bounce by yourself. Steer in the air, grab 12 stars, dodge mines!',
                'Jump on the boss 5 times. Dodge the fireballs!'];
 const OUT5 = ['A ball hit you!','The other team won!','Too many misses!','A mine got you!','The boss got you!'];
-const MAX_LEVEL = 5;
-const cname = (c,lv)=> lv>=5 ? NAMES5[c] : lv>=4 ? NAMES4[c] : lv>=3 ? NAMES3[c] : lv>=2 ? NAMES2[c] : CHALLENGES[c];
-const chelp = (c,lv)=> lv>=5 ? HELP5[c] : lv>=4 ? HELP4[c] : lv>=3 ? HELP3[c] : lv>=2 ? HELP2[c] : HELP[c];
+const NAMES6 = ['JUMP ROPE','LAVA CLIMB','CRUSHERS','WIND PITS','CHAOS FINALE'];
+const HELP6 = ['Jump when the rope sweeps the floor! It gets faster. Stay near the middle.',
+               'The lava is rising! Climb the platforms to the flag at the top!',
+               'Wait for the crushers to shake, then dash under them to the flag!',
+               'Wind pushes you! Jump over the pits and reach the flag.',
+               'Boulders, meteors and lasers together. Survive 30 seconds!'];
+const OUT6 = ['The rope got you!','The lava got you!','You got crushed!','You fell in a pit!','Chaos got you!'];
+const MAX_LEVEL = 6;
+const cname = (c,lv)=> lv>=6 ? NAMES6[c] : lv>=5 ? NAMES5[c] : lv>=4 ? NAMES4[c] : lv>=3 ? NAMES3[c] : lv>=2 ? NAMES2[c] : CHALLENGES[c];
+const chelp = (c,lv)=> lv>=6 ? HELP6[c] : lv>=5 ? HELP5[c] : lv>=4 ? HELP4[c] : lv>=3 ? HELP3[c] : lv>=2 ? HELP2[c] : HELP[c];
 let level = 1, challenge = 0, tiles = [], tileIn = 1.5, lasers = [], laserIn = 1.5, plats = [], crumbleIn = 6;
 let unlocked = {1:0}, levelDone = {};      // progress: furthest unlocked stop per level, finished levels
 let paused = false;
@@ -127,6 +134,8 @@ let notes = [], noteIn = 0.8, hits = 0, misses = 0, laneFlash = [0,0,0];
 let stars = [], starIn = 0.5, mines = [], starScore = 0;
 let boss = null, fireballs = [], fireIn = 2;
 const STAR_GOAL = 12, HIT_Y = 330;
+let ropeA = 0, wind = {f:0, to:0, t:1.5}, finIn = 1.8, finLast = -1, thwomps = [], lavaRise = 0;
+const PITS = [[150,100],[335,110],[525,100]];
 let nextTall = false;
 let meteors = [], meteorIn = 0.9, spikes = [], spikeIn = 1.3, walls = [], wallIn = 1.1, belt = {dir:1, flip:3.5, speed:110}, beltOff = 0;
 const keys = {left:false, right:false, jump:false};
@@ -143,6 +152,9 @@ function reset(){
   makePlats();
   if(mode() === 13) makeStones();
   if(mode() === 24) makeBridge();
+  if(mode() === 41) makeClimb();
+  if(mode() === 42) makeThwomps();
+  ropeA = 0; wind = {f:0, to:0, t:1.5}; finIn = 1.8; finLast = -1; lavaRise = 0;
   inputQ = []; balls = []; ballIn = 7; tugM = 0; tugBurst = 0; tugNext = 3;
   notes = []; noteIn = 0.8; hits = 0; misses = 0; laneFlash = [0,0,0];
   stars = []; starIn = 0.5; starScore = 0; fireballs = []; fireIn = 2;
@@ -164,6 +176,10 @@ function reset(){
   if(mode() === 22){ player.x = W/2 - 15; player.y = PLANK_Y - player.h; }
   if(mode() === 23){ player.x = 20; }
   if(mode() === 30){ player.x = 60; }
+  if(mode() === 40 || mode() === 44){ player.x = W/2 - 15; }
+  if(mode() === 41){ player.x = 60; }
+  if(mode() === 42){ player.x = 20; }
+  if(mode() === 43){ player.x = 30; }
   if(mode() === 31){ player.y = -300; }
   if(mode() === 32){ player.x = W/2 - 15; }
   if(mode() === 33){ player.x = W/2 - 15; player.vy = -740; }
@@ -188,6 +204,7 @@ function update(dt){
   p.vx = (level >= 2 && mode() === 1) ? p.vx + (tvx - p.vx)*Math.min(1, 3.5*dt) : tvx;   // ice = slow to speed up / stop
   if(p.vx) p.face = Math.sign(p.vx);
   p.anim = (p.anim||0) + (p.onGround ? Math.abs(p.vx)*dt*0.07 : 0);
+  if(mode() === 43){ windStep(dt); p.vx += wind.f; }
   if(mode() === 20){ flipStep(dt); return; }
   if(mode() === 22){ seesawStep(dt); return; }
   if(mode() !== 31 && mode() !== 32) inputQ.length = 0;
@@ -210,7 +227,7 @@ function update(dt){
   const prevBottom = p.y + p.h;
   p.y += p.vy*dt;
   p.onGround = false;
-  if(mode() === 3 || mode() === 13 || mode() === 24){
+  if(mode() === 3 || mode() === 13 || mode() === 24 || mode() === 41){
     for(const pl of plats){
       if(!pl.alive) continue;
       if(p.vy >= 0 && prevBottom <= pl.y+3 && p.y+p.h >= pl.y && p.x+p.w-4 > pl.x && p.x+4 < pl.x+pl.pw){
@@ -240,10 +257,10 @@ function update(dt){
       tileIn = Math.max(2.4, 3.1/D());
     }
   }
-  if(mode() === 2){
+  if(mode() === 2 || mode() === 44){
     const elapsed = ROUND_TIME - timer;
     laserIn -= dt;
-    if(laserIn <= 0){
+    if(laserIn <= 0 && mode() === 2){
       const warn = Math.max(0.4, (0.85 - elapsed*0.011)/D());
       const first = Math.random()<0.5 ? 'low' : 'high';
       lasers.push({type:first, t:0, warn, fire:0.3});
@@ -273,9 +290,9 @@ function update(dt){
     }
   }
   const md = mode(), el3 = ROUND_TIME - timer;
-  if(md === 10){                                   // METEOR RAIN
+  if(md === 10 || md === 44){                      // METEOR RAIN (also used by the finale)
     meteorIn -= dt;
-    if(meteorIn <= 0){
+    if(meteorIn <= 0 && md === 10){
       const near = Math.random() < 0.3;
       const x = Math.max(30, Math.min(W-30, near ? p.x + p.w/2 + (Math.random()*160-80) : 30 + Math.random()*(W-60)));
       meteors.push({x, t:0, warn: Math.max(0.8, 1.25/D()), fall:0.3, boom:0.35});
@@ -431,6 +448,39 @@ function update(dt){
       } else { why = 'The boss got you!'; end(false); return; }
     }
   }
+  if(md === 40){                                   // JUMP ROPE
+    const P = Math.max(1.0, (1.6 - el3*0.02)/Math.min(D(),1.15)) * (1 + 0.08*Math.sin(el3*0.8));
+    ropeA += (Math.PI*2/P)*dt;
+    const u = Math.max(-1, Math.min(1, (p.x+p.w/2 - W/2)/360)), lh = ropeH()*(1-u*u), feet = GROUND - (p.y+p.h);
+    if(el3 > 1.5 && lh < 16 && feet < lh + 6){ why = 'The rope got you!'; end(false); return; }
+  }
+  if(md === 41){                                   // LAVA CLIMB
+    lavaRise = el3*(8 + el3*0.2)*Math.min(D(),1.3);
+    if(p.y+p.h > GROUND + 30 - lavaRise + 2){ why = 'The lava got you!'; end(false); return; }
+    if(p.ride && p.ride.goal){ end(true); return; }
+  }
+  if(md === 42){                                   // CRUSHERS
+    for(const t of thwomps){
+      thwState(t, el3);
+      if(p.x+p.w-3 > t.x+2 && p.x+3 < t.x+t.w-2 && p.y+4 < t.bottom && p.y+p.h-3 > t.bottom-80){ why = 'You got crushed!'; end(false); return; }
+    }
+    if(p.x+p.w >= W-50){ end(true); return; }
+  }
+  if(md === 43){                                   // WIND PITS
+    if(p.y > GROUND + 20){ why = 'You fell in a pit!'; end(false); return; }
+    if(p.x+p.w >= W-50){ end(true); return; }
+  }
+  if(md === 44){                                   // CHAOS FINALE: one hazard at a time, picked at random
+    finIn -= dt;
+    if(finIn <= 0){
+      let k; do{ k = Math.floor(Math.random()*5); }while(k === finLast && Math.random() < 0.7);
+      finLast = k;
+      if(k <= 1){ spawnBoulder(); boulders[boulders.length-1].speed *= 0.78; }
+      else if(k === 2){ meteors.push({x: Math.max(30, Math.min(W-30, p.x+p.w/2 + (Math.random()*160-80))), t:0, warn: Math.max(0.8, 1.25/D()), fall:0.3, boom:0.35}); }
+      else { lasers.push({type: k === 3 ? 'low' : 'high', t:0, warn: Math.max(0.55, 0.8 - el3*0.008), fire:0.3}); }
+      finIn = Math.max(1.0, 1.9 - el3*0.025) + Math.random()*0.45;
+    }
+  }
   if(md === 24){                                   // GLASS BRIDGE
     updateBridge(dt);
     if(player.ride && player.ride.goal){ end(true); return; }
@@ -447,7 +497,7 @@ function update(dt){
   }
   boulders = boulders.filter(b => b.x > -80 && b.x < W+80);
   timer -= dt;
-  if(timer <= 0){ timer = 0; const obj = md === 21 || md === 23 || md === 24 || md === 34; if(obj) why = 'Out of time!'; end(!obj); }
+  if(timer <= 0){ timer = 0; const obj = md === 21 || md === 23 || md === 24 || md === 34 || md === 41 || md === 42 || md === 43; if(obj) why = 'Out of time!'; end(!obj); }
 }
 
 const PENDS  = [{x:120,ph:0,L:300},{x:400,ph:2.1,L:300},{x:680,ph:4.2,L:300}];
@@ -463,7 +513,7 @@ function hammer(h, elapsed){
 
 function tideRise(){ return level>=2 && mode()===3 ? Math.min(95, (ROUND_TIME-timer)*3) : 0; }
 
-function mode(){ return level>=5 ? 30 + challenge : level===4 ? 20 + challenge : level===3 ? 10 + challenge : challenge; }   // 0-4 = Level 1-2 games, 10-14 = Level 3 games
+function mode(){ return level>=6 ? 40 + challenge : level>=5 ? 30 + challenge : level===4 ? 20 + challenge : level===3 ? 10 + challenge : challenge; }   // 0-4 = Level 1-2 games, 10-14 = Level 3 games
 
 function makeStones(){
   const d = [[20,GROUND-20,100],[170,GROUND-20,78],[290,GROUND-85,78],[415,GROUND-20,78],[540,GROUND-85,78],[665,GROUND-20,90],[415,GROUND-150,80]];
@@ -723,7 +773,43 @@ function updatePlats(dt){
   }
 }
 
+function ropeH(){ return 150*(1 + Math.cos(ropeA))/2; }
+
+function makeClimb(){
+  const mk = (x,y,pw,goal)=>({x,y,pw,dx:0,alive:true,goal:!!goal});
+  plats = [mk(0, GROUND, W)];
+  for(const y of [310,240,170]){ plats.push(mk(40 + Math.random()*160, y, 110)); plats.push(mk(490 + Math.random()*160, y, 110)); }
+  plats.push(mk(345, 100, 110, true));
+}
+
+function makeThwomps(){
+  thwomps = [130,250,370,490,610].map((x,i)=>({x, w:64, off:[0.0,1.3,0.5,1.8,0.9][i], bottom:GROUND-92, shake:false}));
+}
+function thwState(t, el){
+  const m = Math.min(D(), 1.4), rest = 1.0/m, warn = 0.45, slam = 0.1, hold = 0.5/m, rise = 0.55/m;
+  const P = rest+warn+slam+hold+rise, UP = GROUND-92;
+  let s = (el + t.off) % P; t.shake = false;
+  if(s < rest) t.bottom = UP;
+  else if((s -= rest) < warn){ t.bottom = UP; t.shake = true; }
+  else if((s -= warn) < slam) t.bottom = UP + (GROUND-UP)*(s/slam);
+  else if((s -= slam) < hold) t.bottom = GROUND;
+  else { s -= hold; t.bottom = GROUND - (GROUND-UP)*(s/rise); }
+}
+
+function windStep(dt){
+  wind.t -= dt;
+  if(wind.t <= 0){ wind.to = [-1,0,1][Math.floor(Math.random()*3)] * (70 + Math.random()*40); wind.t = 1.8 + Math.random()*1.4; }
+  wind.f += Math.max(-250*dt, Math.min(250*dt, wind.to - wind.f));
+}
+
 function supported(p){
+  if(mode() === 43){                                   // pits: you fall if both feet are over a pit
+    for(const x of [p.x+6, p.x+p.w-6]){
+      let inPit = false; for(const [px,pw] of PITS) if(x > px && x < px+pw) inPit = true;
+      if(!inPit) return true;
+    }
+    return false;
+  }
   if(mode() !== 1) return true;
   for(const x of [p.x+6, p.x+p.w-6]){
     const t = tiles[Math.min(tiles.length-1, Math.max(0, Math.floor(x/TILE_W)))];
@@ -808,6 +894,11 @@ function draw(){
       g.fillStyle = flash ? '#ff3b5c' : '#78716c'; g.beginPath(); g.roundRect(s.x, s.y, s.pw, 18, 6); g.fill();
       g.fillStyle = flash ? '#ff9aa9' : '#d6d3d1'; g.fillRect(s.x+4, s.y, s.pw-8, 5);
     }
+  } else if(mode() === 43){
+    g.fillStyle = '#0b0420'; g.fillRect(0, GROUND, W, H-GROUND);
+    let x0 = 0; const segs = [];
+    for(const [px,pw] of PITS){ segs.push([x0,px]); x0 = px+pw; } segs.push([x0,W]);
+    for(const [a,b] of segs){ g.fillStyle = C.floor; g.fillRect(a, GROUND, b-a, H-GROUND); g.fillStyle = C.floorTop; g.fillRect(a, GROUND, b-a, 8); }
   } else if(mode() === 22 || mode() === 24){
     const ts = performance.now()/500;
     g.fillStyle = '#0b1740'; g.fillRect(0, GROUND, W, H-GROUND);
@@ -846,7 +937,7 @@ function draw(){
     g.restore();
   }
   const dm = mode();
-  if(dm === 10){
+  if(dm === 10 || dm === 44){
     for(const mt of meteors){
       if(mt.t < mt.warn){                                            // shadow grows = warning
         const k = mt.t/mt.warn;
@@ -898,6 +989,61 @@ function draw(){
       g.fillStyle = '#ff3b5c'; g.font = 'bold 28px "Trebuchet MS",sans-serif'; g.textAlign = 'center';
       g.fillText(belt.dir>0 ? '<<<  REVERSING  <<<' : '>>>  REVERSING  >>>', W/2, 120);
     }
+  }
+  if(dm === 40){                                                     // JUMP ROPE
+    const h = ropeH(), hot = h < 22;
+    g.fillStyle = '#1b0a3d'; g.beginPath(); g.roundRect(26, GROUND-34, 16, 34, 5); g.roundRect(W-42, GROUND-34, 16, 34, 5); g.fill();
+    g.fillStyle = C.floorTop; g.beginPath(); g.arc(34, GROUND-34, 9, 0, 7); g.arc(W-34, GROUND-34, 9, 0, 7); g.fill();
+    g.lineCap = 'round'; g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(40, GROUND+4); g.lineTo(W-40, GROUND+4); g.stroke();
+    g.strokeStyle = hot ? '#ff3b5c' : '#ffd23f'; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(40, GROUND-4); g.quadraticCurveTo(W/2, GROUND-4-2*h, W-40, GROUND-4); g.stroke();
+    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('JUMP when the rope hits the floor!', W/2, 112); }
+  }
+  if(dm === 41){                                                     // LAVA CLIMB
+    for(let i = 1; i < plats.length; i++){
+      const pl = plats[i];
+      g.fillStyle = pl.goal ? '#f59e0b' : '#78716c'; g.beginPath(); g.roundRect(pl.x, pl.y, pl.pw, 18, 6); g.fill();
+      g.fillStyle = pl.goal ? '#fde68a' : '#d6d3d1'; g.fillRect(pl.x+4, pl.y, pl.pw-8, 5);
+      if(pl.goal){ const fx = pl.x+pl.pw/2; g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.moveTo(fx, pl.y); g.lineTo(fx, pl.y-42); g.stroke(); g.fillStyle = '#ef4444'; g.beginPath(); g.moveTo(fx, pl.y-42); g.lineTo(fx+22, pl.y-33); g.lineTo(fx, pl.y-24); g.fill(); }
+    }
+    const lavaY = GROUND + 30 - lavaRise, ts = performance.now()/300;
+    if(lavaY < H){
+      g.fillStyle = '#b91c1c'; g.fillRect(0, lavaY, W, H-lavaY);
+      g.fillStyle = '#f97316'; for(let x = 0; x < W; x += 22) g.fillRect(x, lavaY + Math.sin(x*0.07+ts)*3 - 2, 14, 7);
+      g.fillStyle = '#fde047'; for(let x = 11; x < W; x += 44) g.fillRect(x, lavaY + 10 + Math.sin(x*0.05+ts*1.3)*3, 12, 4);
+    }
+    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('CLIMB! The lava is rising!', W/2, 112); }
+  }
+  if(dm === 42){                                                     // CRUSHERS
+    for(const t of thwomps){
+      const sx = t.shake ? Math.sin(performance.now()/22)*3 : 0, top = t.bottom - 80;
+      if(t.shake){ g.fillStyle = 'rgba(255,60,90,.28)'; g.fillRect(t.x, GROUND-4, t.w, 8); }
+      g.fillStyle = '#1b0a3d'; g.fillRect(t.x+t.w/2-3+sx, 0, 6, Math.max(0, top));
+      g.fillStyle = t.shake ? '#ef4444' : '#6b7280'; g.beginPath(); g.roundRect(t.x+sx, top, t.w, 80, 8); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(t.x+sx+6, top+6, t.w-12, 5);
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(t.x+sx+20, top+30, 8, 0, 7); g.arc(t.x+sx+t.w-20, top+30, 8, 0, 7); g.fill();
+      g.fillStyle = '#111'; g.beginPath(); g.arc(t.x+sx+22, top+33, 4, 0, 7); g.arc(t.x+sx+t.w-22, top+33, 4, 0, 7); g.fill();
+      g.strokeStyle = '#111'; g.lineWidth = 4; g.beginPath(); g.moveTo(t.x+sx+10, top+18); g.lineTo(t.x+sx+28, top+24); g.moveTo(t.x+sx+t.w-10, top+18); g.lineTo(t.x+sx+t.w-28, top+24); g.stroke();
+      g.fillStyle = '#e5e7eb'; for(let k = 0; k < 4; k++){ const bx = t.x+sx+6+k*13; g.beginPath(); g.moveTo(bx, top+80); g.lineTo(bx+6.5, top+66); g.lineTo(bx+13, top+80); g.fill(); }
+    }
+    const fx = W-40; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.moveTo(fx, GROUND); g.lineTo(fx, GROUND-70); g.stroke();
+    g.fillStyle = '#ef4444'; g.beginPath(); g.moveTo(fx, GROUND-70); g.lineTo(fx+26, GROUND-58); g.lineTo(fx, GROUND-46); g.fill();
+    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('Wait for the shake, then dash!', W/2, 112); }
+  }
+  if(dm === 43){                                                     // WIND PITS
+    const af = Math.abs(wind.f), tt = performance.now()/1000;
+    if(af > 8){
+      g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 3; g.lineCap = 'round';
+      for(let i = 0; i < 14; i++){
+        const y = 90 + (i*53)%270, x = (((i*97 + tt*wind.f*2.2) % W) + W) % W, len = af*0.5;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sign(wind.f)*len, y); g.stroke();
+      }
+      g.fillStyle = '#e0f2fe'; g.font = 'bold 28px "Trebuchet MS",sans-serif'; g.textAlign = 'center';
+      g.fillText(wind.f > 0 ? 'WIND  >>>' : '<<<  WIND', W/2, 112);
+    }
+    const fx = W-40; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.moveTo(fx, GROUND); g.lineTo(fx, GROUND-70); g.stroke();
+    g.fillStyle = '#ef4444'; g.beginPath(); g.moveTo(fx, GROUND-70); g.lineTo(fx+26, GROUND-58); g.lineTo(fx, GROUND-46); g.fill();
   }
   if(dm === 30){                                                     // PING PONG PANIC
     const cols = ['#ef4444','#22d3ee','#a3e635','#f472b6','#fbbf24'];
@@ -1083,7 +1229,7 @@ function draw(){
       g.restore();
     }
   }
-  if(mode() === 2){
+  if(mode() === 2 || mode() === 44){
     for(const L of lasers){
       if(L.t < 0) continue;
       const [y0,y1] = beamY(L.type), mid = (y0+y1)/2;
@@ -1146,7 +1292,7 @@ function draw(){
     g.fillStyle = 'rgba(30,10,70,.72)'; g.fillRect(0,0,W,H);
     g.textAlign = 'center'; g.fillStyle = C.text;
     const msg = {ready:['LEVEL '+level,chelp(challenge,level)],
-                 out:['ELIMINATED', (why || (level>=5 ? OUT5 : level>=4 ? OUT4 : level>=3 ? OUT3 : OUT12)[challenge])],
+                 out:['ELIMINATED', (why || (level>=6 ? OUT6 : level>=5 ? OUT5 : level>=4 ? OUT4 : level>=3 ? OUT3 : OUT12)[challenge])],
                  won: (()=>{ const nx = peekNext();
                       if(nx.finished) return ['CHAOS LEGEND!','You beat all '+MAX_LEVEL+' levels!'];
                       return nx.levelUp ? ['LEVEL '+level+' COMPLETE!','Next: Level '+(level+1)+' - brand new challenges!']

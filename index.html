@@ -35,6 +35,8 @@
   #login input[type=text]:focus,#login input[type=email]:focus{border-color:#ff8a2a}
   #login label{display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:13px;color:#d1d5db;margin:10px 0 4px;line-height:1.35}
   #login label input{margin-top:2px;width:18px;height:18px;flex:none}
+  #login .plink{margin:8px 0 2px;font-size:13px}
+  #login .plink a{color:#ffd23f;text-decoration:underline}
   #lerr{min-height:20px;color:#ff8a9a;font-size:14px;margin:6px 0}
   #lbtn{width:100%;padding:14px;border:0;border-radius:14px;background:#ff8a2a;color:#fff;font-size:20px;font-weight:bold;
     letter-spacing:1px;cursor:pointer}
@@ -51,7 +53,8 @@
   <p>Enter your email to play</p>
   <input type="email" id="lemail" placeholder="Your email  (example: name@gmail.com)" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false">
   <input type="text" id="lname" placeholder="Your name (optional)" maxlength="40" autocomplete="name">
-  <label><input type="checkbox" id="lconsent"><span>I agree to share my email with the game owner so I can play.</span></label>
+  <label><input type="checkbox" id="lconsent"><span>I agree to share my email with the game owner so I can play. The owner may email me about new levels and updates.</span></label>
+  <div class="plink"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a></div>
   <div id="lerr"></div>
   <button id="lbtn">PLAY</button>
 </div></div>
@@ -162,7 +165,7 @@ function reset(){
   mines = [{x:200,y:150,vx:80,r:13}];
   boss = {x:560, w:70, h:64, y:GROUND-64, dir:-1, hp:5, stun:0, speed:95};
   cp = []; simSeq = []; simPhase = 'show'; simShowI = 0; simIdx = 0; simT = 0.9; simLit = -1; simFlash = [0,0,0]; simBad = -1;
-  ring = {l:40, r:760, next:3.5, warn:0}; bulls = []; bullIn = 2;
+  ring = {l:40, r:760, next:4.5, warn:0}; bulls = []; bullIn = 2.2;
   dark = {flash:0, flashIn:5, spawnIn:1.2};
   fin = {meteors:[], lasers:[], evIn:1.5};
   if(mode() === 30){ balls = [newBall(), newBall()]; }
@@ -736,15 +739,15 @@ function simStep(dt){                                // COPYCAT: watch the patte
 function newBull(dir, warn, sp){ return {dir, x: dir > 0 ? ring.l + 4 : ring.r - 54, t:0, warn, w:50, h:42, sp, fall:0}; }
 function sumoStep(dt){                               // SUMO RING: the ring shrinks, bulls charge across it
   const p = player, el = ROUND_TIME - timer;
-  if(ring.warn > 0){ ring.warn -= dt; if(ring.warn <= 0){ ring.l += 38; ring.r -= 38; ring.next = 3.4; } }
-  else { ring.next -= dt; if(ring.next <= 0 && ring.r - ring.l > 290) ring.warn = 0.9; }
+  if(ring.warn > 0){ ring.warn -= dt; if(ring.warn <= 0){ ring.l += 30; ring.r -= 30; ring.next = 4.6; } }
+  else { ring.next -= dt; if(ring.next <= 0 && ring.r - ring.l > 340) ring.warn = 1.0; }
   bullIn -= dt;
   if(bullIn <= 0){
-    const dir = Math.random() < 0.5 ? 1 : -1, sp = 385 + el*4.5;
-    bulls.push(newBull(dir, 0.85, sp));
-    if(el > 8 && Math.random() < 0.5) bulls.push(newBull(-dir, 1.25, sp));
-    if(el > 16 && Math.random() < 0.5) bulls.push(newBull(dir, 1.7, sp));
-    bullIn = Math.max(1.45, 2.5 - el*0.035);
+    const dir = Math.random() < 0.5 ? 1 : -1, sp = 330 + el*3.5;
+    bulls.push(newBull(dir, 1.0, sp));
+    if(el > 12 && Math.random() < 0.4) bulls.push(newBull(-dir, 1.45, sp));
+    if(el > 20 && Math.random() < 0.35) bulls.push(newBull(dir, 2.0, sp));
+    bullIn = Math.max(1.8, 2.8 - el*0.03);
   }
   for(const b of bulls){
     b.t += dt;
@@ -1051,7 +1054,7 @@ function draw(){
     g.fillStyle = '#f59e0b'; g.fillRect(ring.l, GROUND, aw, 10);
     g.fillStyle = '#fde68a'; g.fillRect(ring.l, GROUND, aw, 4);
     g.fillStyle = '#b45309'; for(let x=ring.l+10; x<ring.r-6; x+=34) g.fillRect(x, GROUND+16, 18, 5);
-    if(ring.warn > 0 && Math.floor(ring.warn*12)%2 === 0){ g.fillStyle = '#ff3b5c'; g.fillRect(ring.l, GROUND, 38, 12); g.fillRect(ring.r-38, GROUND, 38, 12); }
+    if(ring.warn > 0 && Math.floor(ring.warn*12)%2 === 0){ g.fillStyle = '#ff3b5c'; g.fillRect(ring.l, GROUND, 30, 12); g.fillRect(ring.r-30, GROUND, 30, 12); }
   } else if(mode() !== 1){
     g.fillStyle = C.floor; g.fillRect(0, GROUND, W, H-GROUND);
     g.fillStyle = C.floorTop; g.fillRect(0, GROUND, W, 8);

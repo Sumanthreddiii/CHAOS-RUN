@@ -66,7 +66,7 @@ const C = {sky:'#6a2fd0', floor:'#ff8a2a', floorTop:'#ffd23f', player:'#22d3ee',
 const CHALLENGES = ['BOULDER PANIC','FLOOR IS GONE','LASER DODGE','CRAZY PLATFORMS','HAMMER SMASH'];
 const HELP = ['Survive 30 seconds. Dodge the boulders!','Cyan tiles stay safe. Run to them before the rest vanish!','Low laser: JUMP. High laser: STAY DOWN. Survive 30 seconds!','Ride the platforms. They crumble. Stay out of the water!','Watch the swing. Time your run, or jump over the head!'];
 const TILE_W = 100;
-const THEMES = ['#6a2fd0','#0f766e','#9d174d','#1e3a8a','#7c2d12','#581c87'];   // sky colour changes every level
+const THEMES = ['#6a2fd0','#0f766e','#9d174d','#1e3a8a','#7c2d12','#4d7c0f'];   // sky colour changes every level
 const NAMES2 = ['BOULDER STORM','ICE FLOOR','LASER COMBO','RISING TIDE','HAMMER MAZE'];
 const HELP2 = ['Boulders from BOTH sides, and some bounce!',
                'Slippery ice! Green tiles stay safe, the rest vanish.',
@@ -95,13 +95,13 @@ const HELP5 = ['Giant balls bounce everywhere. Dodge them for 30 seconds!',
                'You bounce by yourself. Steer in the air, grab 12 stars, dodge mines!',
                'Jump on the boss 5 times. Dodge the fireballs!'];
 const OUT5 = ['A ball hit you!','The other team won!','Too many misses!','A mine got you!','The boss got you!'];
-const NAMES6 = ['JUMP ROPE','LAVA CLIMB','CRUSHERS','WIND PITS','CHAOS FINALE'];
-const HELP6 = ['Jump when the rope sweeps the floor! It gets faster. Stay near the middle.',
-               'The lava is rising! Climb the platforms to the flag at the top!',
-               'Wait for the crushers to shake, then dash under them to the flag!',
-               'Wind pushes you! Jump over the pits and reach the flag.',
-               'Boulders, meteors and lasers together. Survive 30 seconds!'];
-const OUT6 = ['The rope got you!','The lava got you!','You got crushed!','You fell in a pit!','Chaos got you!'];
+const NAMES6 = ['SKY CLIMB','COPYCAT','SUMO RING','BLACKOUT','CHAOS FINALE'];
+const HELP6 = ['The platforms sink! Keep hopping UP. Orange ones crumble.',
+               'Watch the pads light up, then repeat the pattern. Left, Space, Right (or tap).',
+               'The ring shrinks. Jump the charging bulls and stay on the ring!',
+               'Lights out! Boulders roll in the dark. Watch for the red eyes.',
+               'Boulders, meteors and lasers all at once. Survive 30 seconds!'];
+const OUT6 = ['You fell onto the spikes!','Wrong button!','You fell out of the ring!','Something got you in the dark!','The chaos got you!'];
 const MAX_LEVEL = 6;
 const cname = (c,lv)=> lv>=6 ? NAMES6[c] : lv>=5 ? NAMES5[c] : lv>=4 ? NAMES4[c] : lv>=3 ? NAMES3[c] : lv>=2 ? NAMES2[c] : CHALLENGES[c];
 const chelp = (c,lv)=> lv>=6 ? HELP6[c] : lv>=5 ? HELP5[c] : lv>=4 ? HELP4[c] : lv>=3 ? HELP3[c] : lv>=2 ? HELP2[c] : HELP[c];
@@ -133,9 +133,13 @@ let tugM = 0, tugBurst = 0, tugNext = 3;
 let notes = [], noteIn = 0.8, hits = 0, misses = 0, laneFlash = [0,0,0];
 let stars = [], starIn = 0.5, mines = [], starScore = 0;
 let boss = null, fireballs = [], fireIn = 2;
+let cp = [], cpLast = 400, cpFr = false;                                   // SKY CLIMB platforms
+let simSeq = [], simPhase = 'show', simShowI = 0, simIdx = 0, simT = 0, simLit = -1, simFlash = [0,0,0], simBad = -1;   // COPYCAT
+const SIM_ROUNDS = 8;
+let ring = {l:40, r:760, next:3.5, warn:0}, bulls = [], bullIn = 2;       // SUMO RING
+let dark = {flash:0, flashIn:5, spawnIn:1.2};                              // BLACKOUT
+let fin = {meteors:[], lasers:[], evIn:1.5};                               // CHAOS FINALE
 const STAR_GOAL = 12, HIT_Y = 330;
-let ropeA = 0, wind = {f:0, to:0, t:1.5}, finIn = 1.8, finLast = -1, thwomps = [], lavaRise = 0;
-const PITS = [[150,100],[335,110],[525,100]];
 let nextTall = false;
 let meteors = [], meteorIn = 0.9, spikes = [], spikeIn = 1.3, walls = [], wallIn = 1.1, belt = {dir:1, flip:3.5, speed:110}, beltOff = 0;
 const keys = {left:false, right:false, jump:false};
@@ -152,14 +156,15 @@ function reset(){
   makePlats();
   if(mode() === 13) makeStones();
   if(mode() === 24) makeBridge();
-  if(mode() === 41) makeClimb();
-  if(mode() === 42) makeThwomps();
-  ropeA = 0; wind = {f:0, to:0, t:1.5}; finIn = 1.8; finLast = -1; lavaRise = 0;
   inputQ = []; balls = []; ballIn = 7; tugM = 0; tugBurst = 0; tugNext = 3;
   notes = []; noteIn = 0.8; hits = 0; misses = 0; laneFlash = [0,0,0];
   stars = []; starIn = 0.5; starScore = 0; fireballs = []; fireIn = 2;
   mines = [{x:200,y:150,vx:80,r:13}];
   boss = {x:560, w:70, h:64, y:GROUND-64, dir:-1, hp:5, stun:0, speed:95};
+  cp = []; simSeq = []; simPhase = 'show'; simShowI = 0; simIdx = 0; simT = 0.9; simLit = -1; simFlash = [0,0,0]; simBad = -1;
+  ring = {l:40, r:760, next:3.5, warn:0}; bulls = []; bullIn = 2;
+  dark = {flash:0, flashIn:5, spawnIn:1.2};
+  fin = {meteors:[], lasers:[], evIn:1.5};
   if(mode() === 30){ balls = [newBall(), newBall()]; }
   why = ''; gdir = 1; flipReq = 0; pillars = []; pillarIn = 1.2;
   coins = []; bombs = []; coinIn = 0.4; bombIn = 1.6; score = 0;
@@ -176,13 +181,12 @@ function reset(){
   if(mode() === 22){ player.x = W/2 - 15; player.y = PLANK_Y - player.h; }
   if(mode() === 23){ player.x = 20; }
   if(mode() === 30){ player.x = 60; }
-  if(mode() === 40 || mode() === 44){ player.x = W/2 - 15; }
-  if(mode() === 41){ player.x = 60; }
-  if(mode() === 42){ player.x = 20; }
-  if(mode() === 43){ player.x = 30; }
   if(mode() === 31){ player.y = -300; }
   if(mode() === 32){ player.x = W/2 - 15; }
   if(mode() === 33){ player.x = W/2 - 15; player.vy = -740; }
+  if(mode() === 40) makeClimb();
+  if(mode() === 41){ player.y = -300; simSeq = [Math.floor(Math.random()*3)]; }
+  if(mode() === 42 || mode() === 43 || mode() === 44){ player.x = W/2 - 15; }
   if(mode() === 3 || mode() === 13 || mode() === 24){ const f = plats[0]; player.x = f.x + f.pw/2 - player.w/2; player.y = f.y - player.h; player.ride = f; }
   state = 'ready';
 }
@@ -204,13 +208,14 @@ function update(dt){
   p.vx = (level >= 2 && mode() === 1) ? p.vx + (tvx - p.vx)*Math.min(1, 3.5*dt) : tvx;   // ice = slow to speed up / stop
   if(p.vx) p.face = Math.sign(p.vx);
   p.anim = (p.anim||0) + (p.onGround ? Math.abs(p.vx)*dt*0.07 : 0);
-  if(mode() === 43){ windStep(dt); p.vx += wind.f; }
   if(mode() === 20){ flipStep(dt); return; }
   if(mode() === 22){ seesawStep(dt); return; }
-  if(mode() !== 31 && mode() !== 32) inputQ.length = 0;
+  if(mode() !== 31 && mode() !== 32 && mode() !== 41) inputQ.length = 0;
   if(mode() === 31){ tugStep(dt); return; }
   if(mode() === 32){ beatStep(dt); return; }
   if(mode() === 33){ bounceStep(dt); return; }
+  if(mode() === 40){ climbStep(dt); return; }
+  if(mode() === 41){ simStep(dt); return; }
   // Jump buffer (press a bit early still works) + coyote time (press a bit late still works)
   if(keys.jump && !wasJump) jumpBuf = 0.12;
   wasJump = keys.jump;
@@ -227,7 +232,7 @@ function update(dt){
   const prevBottom = p.y + p.h;
   p.y += p.vy*dt;
   p.onGround = false;
-  if(mode() === 3 || mode() === 13 || mode() === 24 || mode() === 41){
+  if(mode() === 3 || mode() === 13 || mode() === 24){
     for(const pl of plats){
       if(!pl.alive) continue;
       if(p.vy >= 0 && prevBottom <= pl.y+3 && p.y+p.h >= pl.y && p.x+p.w-4 > pl.x && p.x+4 < pl.x+pl.pw){
@@ -257,10 +262,10 @@ function update(dt){
       tileIn = Math.max(2.4, 3.1/D());
     }
   }
-  if(mode() === 2 || mode() === 44){
+  if(mode() === 2){
     const elapsed = ROUND_TIME - timer;
     laserIn -= dt;
-    if(laserIn <= 0 && mode() === 2){
+    if(laserIn <= 0){
       const warn = Math.max(0.4, (0.85 - elapsed*0.011)/D());
       const first = Math.random()<0.5 ? 'low' : 'high';
       lasers.push({type:first, t:0, warn, fire:0.3});
@@ -290,9 +295,9 @@ function update(dt){
     }
   }
   const md = mode(), el3 = ROUND_TIME - timer;
-  if(md === 10 || md === 44){                      // METEOR RAIN (also used by the finale)
+  if(md === 10){                                   // METEOR RAIN
     meteorIn -= dt;
-    if(meteorIn <= 0 && md === 10){
+    if(meteorIn <= 0){
       const near = Math.random() < 0.3;
       const x = Math.max(30, Math.min(W-30, near ? p.x + p.w/2 + (Math.random()*160-80) : 30 + Math.random()*(W-60)));
       meteors.push({x, t:0, warn: Math.max(0.8, 1.25/D()), fall:0.3, boom:0.35});
@@ -448,39 +453,9 @@ function update(dt){
       } else { why = 'The boss got you!'; end(false); return; }
     }
   }
-  if(md === 40){                                   // JUMP ROPE
-    const P = Math.max(1.0, (1.6 - el3*0.02)/Math.min(D(),1.15)) * (1 + 0.08*Math.sin(el3*0.8));
-    ropeA += (Math.PI*2/P)*dt;
-    const u = Math.max(-1, Math.min(1, (p.x+p.w/2 - W/2)/360)), lh = ropeH()*(1-u*u), feet = GROUND - (p.y+p.h);
-    if(el3 > 1.5 && lh < 16 && feet < lh + 6){ why = 'The rope got you!'; end(false); return; }
-  }
-  if(md === 41){                                   // LAVA CLIMB
-    lavaRise = el3*(8 + el3*0.2)*Math.min(D(),1.3);
-    if(p.y+p.h > GROUND + 30 - lavaRise + 2){ why = 'The lava got you!'; end(false); return; }
-    if(p.ride && p.ride.goal){ end(true); return; }
-  }
-  if(md === 42){                                   // CRUSHERS
-    for(const t of thwomps){
-      thwState(t, el3);
-      if(p.x+p.w-3 > t.x+2 && p.x+3 < t.x+t.w-2 && p.y+4 < t.bottom && p.y+p.h-3 > t.bottom-80){ why = 'You got crushed!'; end(false); return; }
-    }
-    if(p.x+p.w >= W-50){ end(true); return; }
-  }
-  if(md === 43){                                   // WIND PITS
-    if(p.y > GROUND + 20){ why = 'You fell in a pit!'; end(false); return; }
-    if(p.x+p.w >= W-50){ end(true); return; }
-  }
-  if(md === 44){                                   // CHAOS FINALE: one hazard at a time, picked at random
-    finIn -= dt;
-    if(finIn <= 0){
-      let k; do{ k = Math.floor(Math.random()*5); }while(k === finLast && Math.random() < 0.7);
-      finLast = k;
-      if(k <= 1){ spawnBoulder(); boulders[boulders.length-1].speed *= 0.78; }
-      else if(k === 2){ meteors.push({x: Math.max(30, Math.min(W-30, p.x+p.w/2 + (Math.random()*160-80))), t:0, warn: Math.max(0.8, 1.25/D()), fall:0.3, boom:0.35}); }
-      else { lasers.push({type: k === 3 ? 'low' : 'high', t:0, warn: Math.max(0.55, 0.8 - el3*0.008), fire:0.3}); }
-      finIn = Math.max(1.0, 1.9 - el3*0.025) + Math.random()*0.45;
-    }
-  }
+  if(md === 42 && sumoStep(dt)) return;
+  if(md === 43) darkStep(dt);
+  if(md === 44 && finaleStep(dt)) return;
   if(md === 24){                                   // GLASS BRIDGE
     updateBridge(dt);
     if(player.ride && player.ride.goal){ end(true); return; }
@@ -497,7 +472,7 @@ function update(dt){
   }
   boulders = boulders.filter(b => b.x > -80 && b.x < W+80);
   timer -= dt;
-  if(timer <= 0){ timer = 0; const obj = md === 21 || md === 23 || md === 24 || md === 34 || md === 41 || md === 42 || md === 43; if(obj) why = 'Out of time!'; end(!obj); }
+  if(timer <= 0){ timer = 0; const obj = md === 21 || md === 23 || md === 24 || md === 34; if(obj) why = 'Out of time!'; end(!obj); }
 }
 
 const PENDS  = [{x:120,ph:0,L:300},{x:400,ph:2.1,L:300},{x:680,ph:4.2,L:300}];
@@ -679,6 +654,197 @@ function bounceStep(dt){                   // BOUNCE HOUSE: you bounce on your o
   timer -= dt; if(timer <= 0){ timer = 0; why = 'Out of time!'; end(false); }
 }
 
+// ===================== LEVEL 6 =====================
+function newClimbPlat(y, el){
+  const w = Math.max(70, 130 - el*1.5 + Math.random()*20 - 10);
+  let cx = cpLast + (Math.random()*2-1)*190; cx = Math.max(w/2+12, Math.min(W-w/2-12, cx)); cpLast = cx;
+  const fr = el > 6 && !cpFr && Math.random() < 0.3; cpFr = fr;      // never two crumbling ones in a row
+  return {x:cx-w/2, y, py:y, w, alive:true, fr, st:0};
+}
+function makeClimb(){
+  cp = [{x:W/2-110, y:330, py:330, w:220, alive:true, fr:false, st:0}]; cpLast = W/2; cpFr = false;
+  let top = 330;
+  while(top > -40){ top -= 62 + Math.random()*26; cp.push(newClimbPlat(top, 0)); }
+  player.x = W/2 - 15; player.y = 330 - player.h; player.onGround = true; player.ride = cp[0]; player.jumps = 0;
+}
+function climbStep(dt){                              // SKY CLIMB: the platforms sink, keep hopping up
+  const p = player, el = ROUND_TIME - timer, sc = 28 + el*1.4;
+  p.vx = (keys.right ? 230 : 0) - (keys.left ? 230 : 0); if(p.vx) p.face = Math.sign(p.vx);
+  p.anim = (p.anim||0) + (p.onGround ? Math.abs(p.vx)*dt*0.07 : 0);
+  if(keys.jump && !wasJump) jumpBuf = 0.12;
+  wasJump = keys.jump; jumpBuf -= dt;
+  coyote = p.onGround ? 0.08 : coyote - dt;
+  if(jumpBuf > 0 && coyote > 0){ p.vy = -560; p.jumps = 1; p.onGround = false; p.ride = null; jumpBuf = 0; coyote = 0; }
+  else if(jumpBuf > 0 && p.jumps < 2){ p.vy = -540; p.jumps = 2; jumpBuf = 0; }
+  if(!keys.jump && p.vy < -200) p.vy += 1500*dt*1.5;
+  p.vy += 1500*dt;
+  const prevBottom = p.y + p.h;
+  for(const c of cp){ c.py = c.y; c.y += sc*dt; }
+  p.x = clampX(p, p.x + p.vx*dt);
+  const r = p.ride;
+  if(r && r.alive && p.vy >= 0 && p.x+p.w-4 > r.x && p.x+4 < r.x+r.w){ p.y = r.y - p.h; p.vy = 0; p.onGround = true; }
+  else {
+    p.ride = null; p.onGround = false; p.y += p.vy*dt;
+    if(p.vy >= 0) for(const c of cp){
+      if(!c.alive) continue;
+      if(prevBottom <= c.py + 4 && p.y+p.h >= c.y && p.x+p.w-4 > c.x && p.x+4 < c.x+c.w){ p.y = c.y - p.h; p.vy = 0; p.onGround = true; p.jumps = 0; p.ride = c; break; }
+    }
+  }
+  for(const c of cp){                                  // orange platforms crumble when you stand on them
+    if(!c.fr || !c.alive) continue;
+    if(p.ride === c) c.st += dt; else c.st = Math.max(0, c.st - dt*0.5);
+    if(c.st > 0.65){ c.alive = false; if(p.ride === c) p.ride = null; }
+  }
+  if(p.y < 60){ p.y = 60; p.vy = Math.max(p.vy, 0); }
+  cp = cp.filter(c => c.y < H + 30);
+  let top = cp.length ? Math.min(...cp.map(c => c.y)) : 0;
+  while(top > -40){ top -= 60 + Math.random()*28; cp.push(newClimbPlat(top, el)); }
+  if(p.y + p.h > H - 14){ why = 'You fell onto the spikes!'; end(false); return; }
+  timer -= dt; if(timer <= 0){ timer = 0; end(true); }
+}
+
+function simStep(dt){                                // COPYCAT: watch the pattern, then repeat it
+  const n = simSeq.length, lit = Math.max(0.26, 0.5 - n*0.035), gap = Math.max(0.12, 0.2 - n*0.008);
+  for(let i=0;i<3;i++) simFlash[i] = Math.max(0, simFlash[i] - dt);
+  if(simPhase === 'show'){
+    inputQ.length = 0;
+    simT -= dt;
+    if(simT <= 0){
+      if(simLit >= 0){ simLit = -1; simT = gap; }
+      else if(simShowI < n){ simLit = simSeq[simShowI++]; simT = lit; }
+      else { simPhase = 'input'; simIdx = 0; simT = 4; }
+    }
+  } else if(simPhase === 'input'){
+    for(const q of inputQ){
+      if(q.lane === simSeq[simIdx]){
+        simFlash[q.lane] = 0.25; simIdx++; simT = 4;
+        if(simIdx >= n){ simPhase = 'between'; simT = 0.9; break; }
+      } else { simBad = q.lane; why = 'Wrong button!'; inputQ.length = 0; end(false); return; }
+    }
+    inputQ.length = 0;
+    if(simPhase === 'input'){ simT -= dt; if(simT <= 0){ why = 'Too slow!'; end(false); return; } }
+  } else {
+    inputQ.length = 0;
+    simT -= dt;
+    if(simT <= 0){
+      if(n >= SIM_ROUNDS){ end(true); return; }
+      simSeq.push(Math.floor(Math.random()*3)); simPhase = 'show'; simShowI = 0; simT = 0.5; simLit = -1;
+    }
+  }
+}
+
+function newBull(dir, warn, sp){ return {dir, x: dir > 0 ? ring.l + 4 : ring.r - 54, t:0, warn, w:50, h:42, sp, fall:0}; }
+function sumoStep(dt){                               // SUMO RING: the ring shrinks, bulls charge across it
+  const p = player, el = ROUND_TIME - timer;
+  if(ring.warn > 0){ ring.warn -= dt; if(ring.warn <= 0){ ring.l += 38; ring.r -= 38; ring.next = 3.4; } }
+  else { ring.next -= dt; if(ring.next <= 0 && ring.r - ring.l > 290) ring.warn = 0.9; }
+  bullIn -= dt;
+  if(bullIn <= 0){
+    const dir = Math.random() < 0.5 ? 1 : -1, sp = 385 + el*4.5;
+    bulls.push(newBull(dir, 0.85, sp));
+    if(el > 8 && Math.random() < 0.5) bulls.push(newBull(-dir, 1.25, sp));
+    if(el > 16 && Math.random() < 0.5) bulls.push(newBull(dir, 1.7, sp));
+    bullIn = Math.max(1.45, 2.5 - el*0.035);
+  }
+  for(const b of bulls){
+    b.t += dt;
+    if(b.t < b.warn) b.x = b.dir > 0 ? ring.l + 4 : ring.r - 54; else b.x += b.dir*b.sp*dt;
+    const mid = b.x + b.w/2;
+    if(mid < ring.l - 10 || mid > ring.r + 10) b.fall += dt;
+    else if(b.t >= b.warn && p.x+p.w-5 > b.x && p.x+5 < b.x+b.w && p.y+p.h-3 > GROUND-b.h){ why = 'The bull got you!'; end(false); return true; }
+  }
+  bulls = bulls.filter(b => b.fall < 1.2 && b.x > -120 && b.x < W+120);
+  return false;
+}
+
+function darkStep(dt){                               // BLACKOUT: boulders roll in the dark
+  const el = ROUND_TIME - timer;
+  dark.spawnIn -= dt;
+  if(dark.spawnIn <= 0){
+    const both = el > 12 && Math.random() < 0.35, d0 = Math.random() < 0.5 ? 1 : -1;
+    for(const dir of (both ? [1,-1] : [d0])){
+      const bounce = Math.random() < 0.35, r = bounce ? 18 + Math.random()*8 : 22 + Math.random()*14;
+      boulders.push({x: dir<0 ? W+r : -r, y: GROUND-r, r, speed: 210 + el*2.5 + Math.random()*40, dir, bounce, vy:0, rot:0});
+    }
+    dark.spawnIn = Math.max(0.85, 1.7 - el*0.028) + Math.random()*0.35;
+  }
+  dark.flashIn -= dt; if(dark.flashIn <= 0){ dark.flash = 0.45; dark.flashIn = 6 + Math.random()*2; }
+  if(dark.flash > 0) dark.flash -= dt;
+}
+
+function finaleStep(dt){                             // CHAOS FINALE: boulders + meteors + lasers together
+  const p = player, el = ROUND_TIME - timer;
+  fin.evIn -= dt;
+  if(fin.evIn <= 0){
+    const r = Math.random(), busy = fin.lasers.length > 0;
+    if(r < 0.4){
+      const dir = Math.random() < 0.5 ? 1 : -1, bounce = Math.random() < 0.35, rad = bounce ? 18 + Math.random()*8 : 22 + Math.random()*14;
+      boulders.push({x: dir<0 ? W+rad : -rad, y: GROUND-rad, r: rad, speed: 235 + el*2.2 + Math.random()*35, dir, bounce, vy:0, rot:0});
+    } else if(r < 0.72 || busy){
+      const near = Math.random() < 0.55;
+      const x = Math.max(30, Math.min(W-30, near ? p.x + p.w/2 + (Math.random()*140-70) : 30 + Math.random()*(W-60)));
+      fin.meteors.push({x, t:0, warn:0.95, fall:0.3, boom:0.35});
+    } else {
+      fin.lasers.push({type: Math.random() < 0.5 ? 'low' : 'high', t:0, warn:0.85, fire:0.3});
+    }
+    fin.evIn = Math.max(0.78, 1.5 - el*0.024) + Math.random()*0.3;
+  }
+  for(const mt of fin.meteors){
+    mt.t += dt;
+    if(mt.t >= mt.warn && mt.t < mt.warn + mt.fall){
+      const f = (mt.t-mt.warn)/mt.fall, my = -30 + f*(GROUND-14+30);
+      const cx = Math.max(p.x+3, Math.min(mt.x, p.x+p.w-3)), cy = Math.max(p.y+3, Math.min(my, p.y+p.h-3));
+      if(Math.hypot(mt.x-cx, my-cy) < 15){ why = 'A meteor got you!'; end(false); return true; }
+    } else if(mt.t >= mt.warn + mt.fall && mt.t < mt.warn + mt.fall + mt.boom){
+      const cx = Math.max(p.x+3, Math.min(mt.x, p.x+p.w-3)), cy = Math.max(p.y+3, Math.min(GROUND, p.y+p.h));
+      if(Math.hypot(mt.x-cx, GROUND-cy) < 40){ why = 'A meteor got you!'; end(false); return true; }
+    }
+  }
+  fin.meteors = fin.meteors.filter(mt => mt.t < mt.warn + mt.fall + mt.boom);
+  for(const L of fin.lasers){
+    L.t += dt;
+    if(L.t >= L.warn && L.t <= L.warn + L.fire){
+      const [y0,y1] = beamY(L.type);
+      if(p.y+3 < y1 && p.y+p.h-3 > y0){ why = 'The laser got you!'; end(false); return true; }
+    }
+  }
+  fin.lasers = fin.lasers.filter(L => L.t <= L.warn + L.fire);
+  return false;
+}
+
+function drawMeteorFx(mt){
+  if(mt.t < mt.warn){
+    const k = mt.t/mt.warn;
+    g.fillStyle = 'rgba(0,0,0,'+(0.25+0.35*k)+')'; g.beginPath(); g.ellipse(mt.x, GROUND+3, 40*(0.4+0.6*k), 9, 0, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(255,80,60,'+(0.3+0.5*k)+')'; g.lineWidth = 3; g.beginPath(); g.ellipse(mt.x, GROUND+3, 40, 9, 0, 0, 7); g.stroke();
+  } else if(mt.t < mt.warn + mt.fall){
+    const f = (mt.t-mt.warn)/mt.fall, my = -30 + f*(GROUND-14+30);
+    g.fillStyle = 'rgba(255,160,40,.5)'; g.fillRect(mt.x-6, my-60, 12, 60);
+    g.fillStyle = '#ff6a1a'; g.beginPath(); g.arc(mt.x, my, 15, 0, 7); g.fill();
+    g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(mt.x, my, 8, 0, 7); g.fill();
+  } else {
+    const f = (mt.t-mt.warn-mt.fall)/mt.boom;
+    g.fillStyle = 'rgba(255,120,30,'+(0.85-0.6*f)+')'; g.beginPath(); g.arc(mt.x, GROUND, 40*(0.5+0.5*f), Math.PI, 0); g.fill();
+    g.fillStyle = 'rgba(255,230,120,'+(0.9-0.7*f)+')'; g.beginPath(); g.arc(mt.x, GROUND, 21*(0.5+0.5*f), Math.PI, 0); g.fill();
+  }
+}
+function drawLaserFx(L){
+  const [y0,y1] = beamY(L.type), mid = (y0+y1)/2, firing = L.t >= L.warn;
+  g.fillStyle = '#1b0a3d'; g.fillRect(0, y0-6, 16, y1-y0+12); g.fillRect(W-16, y0-6, 16, y1-y0+12);
+  if(!firing){
+    if(Math.floor(L.t*14)%2===0){
+      g.strokeStyle = 'rgba(255,80,110,.9)'; g.lineWidth = 3; g.setLineDash([14,10]);
+      g.beginPath(); g.moveTo(16, mid); g.lineTo(W-16, mid); g.stroke(); g.setLineDash([]);
+    }
+    g.fillStyle = '#fff'; g.font = 'bold 20px "Trebuchet MS",sans-serif'; g.textAlign = 'center';
+    g.fillText(L.type==='low' ? 'JUMP!' : 'STAY DOWN!', W/2, y0-12);
+  } else {
+    g.fillStyle = 'rgba(255,60,90,.35)'; g.fillRect(16, y0-8, W-32, y1-y0+16);
+    g.fillStyle = '#ff3b5c'; g.fillRect(16, y0, W-32, y1-y0);
+    g.fillStyle = '#fff'; g.fillRect(16, mid-2, W-32, 4);
+  }
+}
+
 function flipStep(dt){                       // GRAVITY FLIP
   const p = player, el = ROUND_TIME - timer;
   p.vx = (keys.right ? 230 : 0) - (keys.left ? 230 : 0);
@@ -773,43 +939,8 @@ function updatePlats(dt){
   }
 }
 
-function ropeH(){ return 150*(1 + Math.cos(ropeA))/2; }
-
-function makeClimb(){
-  const mk = (x,y,pw,goal)=>({x,y,pw,dx:0,alive:true,goal:!!goal});
-  plats = [mk(0, GROUND, W)];
-  for(const y of [310,240,170]){ plats.push(mk(40 + Math.random()*160, y, 110)); plats.push(mk(490 + Math.random()*160, y, 110)); }
-  plats.push(mk(345, 100, 110, true));
-}
-
-function makeThwomps(){
-  thwomps = [130,250,370,490,610].map((x,i)=>({x, w:64, off:[0.0,1.3,0.5,1.8,0.9][i], bottom:GROUND-92, shake:false}));
-}
-function thwState(t, el){
-  const m = Math.min(D(), 1.4), rest = 1.0/m, warn = 0.45, slam = 0.1, hold = 0.5/m, rise = 0.55/m;
-  const P = rest+warn+slam+hold+rise, UP = GROUND-92;
-  let s = (el + t.off) % P; t.shake = false;
-  if(s < rest) t.bottom = UP;
-  else if((s -= rest) < warn){ t.bottom = UP; t.shake = true; }
-  else if((s -= warn) < slam) t.bottom = UP + (GROUND-UP)*(s/slam);
-  else if((s -= slam) < hold) t.bottom = GROUND;
-  else { s -= hold; t.bottom = GROUND - (GROUND-UP)*(s/rise); }
-}
-
-function windStep(dt){
-  wind.t -= dt;
-  if(wind.t <= 0){ wind.to = [-1,0,1][Math.floor(Math.random()*3)] * (70 + Math.random()*40); wind.t = 1.8 + Math.random()*1.4; }
-  wind.f += Math.max(-250*dt, Math.min(250*dt, wind.to - wind.f));
-}
-
 function supported(p){
-  if(mode() === 43){                                   // pits: you fall if both feet are over a pit
-    for(const x of [p.x+6, p.x+p.w-6]){
-      let inPit = false; for(const [px,pw] of PITS) if(x > px && x < px+pw) inPit = true;
-      if(!inPit) return true;
-    }
-    return false;
-  }
+  if(mode() === 42){ for(const x of [p.x+6, p.x+p.w-6]) if(x >= ring.l && x <= ring.r) return true; return false; }
   if(mode() !== 1) return true;
   for(const x of [p.x+6, p.x+p.w-6]){
     const t = tiles[Math.min(tiles.length-1, Math.max(0, Math.floor(x/TILE_W)))];
@@ -894,11 +1025,6 @@ function draw(){
       g.fillStyle = flash ? '#ff3b5c' : '#78716c'; g.beginPath(); g.roundRect(s.x, s.y, s.pw, 18, 6); g.fill();
       g.fillStyle = flash ? '#ff9aa9' : '#d6d3d1'; g.fillRect(s.x+4, s.y, s.pw-8, 5);
     }
-  } else if(mode() === 43){
-    g.fillStyle = '#0b0420'; g.fillRect(0, GROUND, W, H-GROUND);
-    let x0 = 0; const segs = [];
-    for(const [px,pw] of PITS){ segs.push([x0,px]); x0 = px+pw; } segs.push([x0,W]);
-    for(const [a,b] of segs){ g.fillStyle = C.floor; g.fillRect(a, GROUND, b-a, H-GROUND); g.fillStyle = C.floorTop; g.fillRect(a, GROUND, b-a, 8); }
   } else if(mode() === 22 || mode() === 24){
     const ts = performance.now()/500;
     g.fillStyle = '#0b1740'; g.fillRect(0, GROUND, W, H-GROUND);
@@ -916,6 +1042,16 @@ function draw(){
       g.fillStyle = flash ? '#ff9aa9' : C.floorTop; g.fillRect(pl.x+4, pl.y, pl.pw-8, 5);
     }
     if(rise > 0){ g.fillStyle = 'rgba(14,116,144,.55)'; g.fillRect(0, wy+4, W, H-wy); }
+  } else if(mode() === 40 || mode() === 41){
+    // no floor: Sky Climb has a deadly drop, Copycat is a stage of pads
+  } else if(mode() === 42){
+    g.fillStyle = '#12062e'; g.fillRect(0, GROUND, W, H-GROUND);
+    const aw = ring.r - ring.l;
+    g.fillStyle = '#92400e'; g.fillRect(ring.l, GROUND+8, aw, 30);
+    g.fillStyle = '#f59e0b'; g.fillRect(ring.l, GROUND, aw, 10);
+    g.fillStyle = '#fde68a'; g.fillRect(ring.l, GROUND, aw, 4);
+    g.fillStyle = '#b45309'; for(let x=ring.l+10; x<ring.r-6; x+=34) g.fillRect(x, GROUND+16, 18, 5);
+    if(ring.warn > 0 && Math.floor(ring.warn*12)%2 === 0){ g.fillStyle = '#ff3b5c'; g.fillRect(ring.l, GROUND, 38, 12); g.fillRect(ring.r-38, GROUND, 38, 12); }
   } else if(mode() !== 1){
     g.fillStyle = C.floor; g.fillRect(0, GROUND, W, H-GROUND);
     g.fillStyle = C.floorTop; g.fillRect(0, GROUND, W, 8);
@@ -937,7 +1073,7 @@ function draw(){
     g.restore();
   }
   const dm = mode();
-  if(dm === 10 || dm === 44){
+  if(dm === 10){
     for(const mt of meteors){
       if(mt.t < mt.warn){                                            // shadow grows = warning
         const k = mt.t/mt.warn;
@@ -989,61 +1125,6 @@ function draw(){
       g.fillStyle = '#ff3b5c'; g.font = 'bold 28px "Trebuchet MS",sans-serif'; g.textAlign = 'center';
       g.fillText(belt.dir>0 ? '<<<  REVERSING  <<<' : '>>>  REVERSING  >>>', W/2, 120);
     }
-  }
-  if(dm === 40){                                                     // JUMP ROPE
-    const h = ropeH(), hot = h < 22;
-    g.fillStyle = '#1b0a3d'; g.beginPath(); g.roundRect(26, GROUND-34, 16, 34, 5); g.roundRect(W-42, GROUND-34, 16, 34, 5); g.fill();
-    g.fillStyle = C.floorTop; g.beginPath(); g.arc(34, GROUND-34, 9, 0, 7); g.arc(W-34, GROUND-34, 9, 0, 7); g.fill();
-    g.lineCap = 'round'; g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 6;
-    g.beginPath(); g.moveTo(40, GROUND+4); g.lineTo(W-40, GROUND+4); g.stroke();
-    g.strokeStyle = hot ? '#ff3b5c' : '#ffd23f'; g.lineWidth = 7;
-    g.beginPath(); g.moveTo(40, GROUND-4); g.quadraticCurveTo(W/2, GROUND-4-2*h, W-40, GROUND-4); g.stroke();
-    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('JUMP when the rope hits the floor!', W/2, 112); }
-  }
-  if(dm === 41){                                                     // LAVA CLIMB
-    for(let i = 1; i < plats.length; i++){
-      const pl = plats[i];
-      g.fillStyle = pl.goal ? '#f59e0b' : '#78716c'; g.beginPath(); g.roundRect(pl.x, pl.y, pl.pw, 18, 6); g.fill();
-      g.fillStyle = pl.goal ? '#fde68a' : '#d6d3d1'; g.fillRect(pl.x+4, pl.y, pl.pw-8, 5);
-      if(pl.goal){ const fx = pl.x+pl.pw/2; g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.moveTo(fx, pl.y); g.lineTo(fx, pl.y-42); g.stroke(); g.fillStyle = '#ef4444'; g.beginPath(); g.moveTo(fx, pl.y-42); g.lineTo(fx+22, pl.y-33); g.lineTo(fx, pl.y-24); g.fill(); }
-    }
-    const lavaY = GROUND + 30 - lavaRise, ts = performance.now()/300;
-    if(lavaY < H){
-      g.fillStyle = '#b91c1c'; g.fillRect(0, lavaY, W, H-lavaY);
-      g.fillStyle = '#f97316'; for(let x = 0; x < W; x += 22) g.fillRect(x, lavaY + Math.sin(x*0.07+ts)*3 - 2, 14, 7);
-      g.fillStyle = '#fde047'; for(let x = 11; x < W; x += 44) g.fillRect(x, lavaY + 10 + Math.sin(x*0.05+ts*1.3)*3, 12, 4);
-    }
-    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('CLIMB! The lava is rising!', W/2, 112); }
-  }
-  if(dm === 42){                                                     // CRUSHERS
-    for(const t of thwomps){
-      const sx = t.shake ? Math.sin(performance.now()/22)*3 : 0, top = t.bottom - 80;
-      if(t.shake){ g.fillStyle = 'rgba(255,60,90,.28)'; g.fillRect(t.x, GROUND-4, t.w, 8); }
-      g.fillStyle = '#1b0a3d'; g.fillRect(t.x+t.w/2-3+sx, 0, 6, Math.max(0, top));
-      g.fillStyle = t.shake ? '#ef4444' : '#6b7280'; g.beginPath(); g.roundRect(t.x+sx, top, t.w, 80, 8); g.fill();
-      g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(t.x+sx+6, top+6, t.w-12, 5);
-      g.fillStyle = '#fff'; g.beginPath(); g.arc(t.x+sx+20, top+30, 8, 0, 7); g.arc(t.x+sx+t.w-20, top+30, 8, 0, 7); g.fill();
-      g.fillStyle = '#111'; g.beginPath(); g.arc(t.x+sx+22, top+33, 4, 0, 7); g.arc(t.x+sx+t.w-22, top+33, 4, 0, 7); g.fill();
-      g.strokeStyle = '#111'; g.lineWidth = 4; g.beginPath(); g.moveTo(t.x+sx+10, top+18); g.lineTo(t.x+sx+28, top+24); g.moveTo(t.x+sx+t.w-10, top+18); g.lineTo(t.x+sx+t.w-28, top+24); g.stroke();
-      g.fillStyle = '#e5e7eb'; for(let k = 0; k < 4; k++){ const bx = t.x+sx+6+k*13; g.beginPath(); g.moveTo(bx, top+80); g.lineTo(bx+6.5, top+66); g.lineTo(bx+13, top+80); g.fill(); }
-    }
-    const fx = W-40; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.moveTo(fx, GROUND); g.lineTo(fx, GROUND-70); g.stroke();
-    g.fillStyle = '#ef4444'; g.beginPath(); g.moveTo(fx, GROUND-70); g.lineTo(fx+26, GROUND-58); g.lineTo(fx, GROUND-46); g.fill();
-    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('Wait for the shake, then dash!', W/2, 112); }
-  }
-  if(dm === 43){                                                     // WIND PITS
-    const af = Math.abs(wind.f), tt = performance.now()/1000;
-    if(af > 8){
-      g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 3; g.lineCap = 'round';
-      for(let i = 0; i < 14; i++){
-        const y = 90 + (i*53)%270, x = (((i*97 + tt*wind.f*2.2) % W) + W) % W, len = af*0.5;
-        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sign(wind.f)*len, y); g.stroke();
-      }
-      g.fillStyle = '#e0f2fe'; g.font = 'bold 28px "Trebuchet MS",sans-serif'; g.textAlign = 'center';
-      g.fillText(wind.f > 0 ? 'WIND  >>>' : '<<<  WIND', W/2, 112);
-    }
-    const fx = W-40; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.moveTo(fx, GROUND); g.lineTo(fx, GROUND-70); g.stroke();
-    g.fillStyle = '#ef4444'; g.beginPath(); g.moveTo(fx, GROUND-70); g.lineTo(fx+26, GROUND-58); g.lineTo(fx, GROUND-46); g.fill();
   }
   if(dm === 30){                                                     // PING PONG PANIC
     const cols = ['#ef4444','#22d3ee','#a3e635','#f472b6','#fbbf24'];
@@ -1131,6 +1212,87 @@ function draw(){
     }
     g.fillStyle = '#c4b5fd'; g.font = 'bold 14px "Trebuchet MS",sans-serif'; g.textAlign = 'left'; g.fillText('BOSS', 18, 60);
     for(let i=0;i<5;i++){ g.fillStyle = i < boss.hp ? '#ef4444' : '#3b1a7a'; g.fillRect(64 + i*24, 48, 20, 14); }
+  }
+  if(dm === 40){                                                     // SKY CLIMB
+    g.fillStyle = 'rgba(255,59,92,.28)'; g.fillRect(0, H-26, W, 26);
+    g.fillStyle = 'rgba(255,59,92,.8)';
+    for(let x=0;x<W;x+=28){ g.beginPath(); g.moveTo(x, H); g.lineTo(x+14, H-16); g.lineTo(x+28, H); g.fill(); }
+    for(const c of cp){
+      if(!c.alive) continue;
+      const sh = c.fr && c.st > 0 ? Math.sin(performance.now()/30)*2 : 0, hot = c.fr && c.st > 0 && Math.floor(c.st*14)%2===0;
+      g.fillStyle = c.fr ? (hot ? '#ff3b5c' : '#fb923c') : '#7dd3fc';
+      g.beginPath(); g.roundRect(c.x+sh, c.y, c.w, 14, 6); g.fill();
+      g.fillStyle = c.fr ? '#fed7aa' : '#e0f2fe'; g.fillRect(c.x+sh+4, c.y, c.w-8, 4);
+      if(c.fr){ g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.beginPath(); g.moveTo(c.x+c.w*0.3, c.y+3); g.lineTo(c.x+c.w*0.38, c.y+13); g.moveTo(c.x+c.w*0.65, c.y+2); g.lineTo(c.x+c.w*0.58, c.y+13); g.stroke(); }
+    }
+    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('KEEP CLIMBING! Orange ones crumble.', W/2, 112); }
+  }
+  if(dm === 41){                                                     // COPYCAT
+    const cols = ['#ef4444','#22d3ee','#a3e635'], names = ['LEFT / A','SPACE / UP','RIGHT / D'];
+    for(let l=0;l<3;l++){
+      const x = W/2 + (l-1)*210, on = simLit === l || simFlash[l] > 0, bad = state === 'out' && simBad === l;
+      g.globalAlpha = (on || bad) ? 1 : 0.3;
+      g.fillStyle = bad ? '#ffffff' : cols[l]; g.beginPath(); g.roundRect(x-75, 150, 150, 170, 22); g.fill();
+      g.globalAlpha = 1;
+      g.fillStyle = on ? '#1b0a3d' : 'rgba(255,255,255,.7)'; g.beginPath();
+      if(l === 0){ g.moveTo(x-22, 235); g.lineTo(x+16, 208); g.lineTo(x+16, 262); }
+      else if(l === 1){ g.moveTo(x, 205); g.lineTo(x-26, 258); g.lineTo(x+26, 258); }
+      else { g.moveTo(x+22, 235); g.lineTo(x-16, 208); g.lineTo(x-16, 262); }
+      g.fill();
+      g.fillStyle = '#e5e7eb'; g.font = 'bold 14px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText(names[l], x, 345);
+    }
+    g.fillStyle = C.floorTop; g.font = 'bold 34px "Trebuchet MS",sans-serif'; g.textAlign = 'center';
+    g.fillText(simPhase === 'show' ? 'WATCH!' : simPhase === 'input' ? 'YOUR TURN!' : 'NICE!', W/2, 118);
+    const n = simSeq.length;
+    for(let i=0;i<n;i++){
+      const dx = W/2 + (i-(n-1)/2)*26, done = simPhase === 'between' || (simPhase === 'input' && i < simIdx);
+      g.fillStyle = done ? '#4ade80' : 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(dx, 378, 8, 0, 7); g.fill();
+    }
+    if(simPhase === 'input' && state === 'play'){
+      g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(W/2-120, 404, 240, 6);
+      g.fillStyle = C.floorTop; g.fillRect(W/2-120, 404, 240*Math.max(0, simT)/4, 6);
+    }
+  }
+  if(dm === 42){                                                     // SUMO RING
+    for(const b of bulls){
+      const charging = b.t >= b.warn, sh = charging ? 0 : Math.sin(performance.now()/25)*2;
+      const by = GROUND - b.h + (b.fall > 0 ? 450*b.fall*b.fall : 0);
+      g.save(); g.translate(b.x + b.w/2 + sh, by + b.h/2); g.scale(b.dir, 1);
+      g.fillStyle = '#3b1a7a'; g.fillRect(-b.w/2+6, b.h/2-6, 9, 8); g.fillRect(b.w/2-15, b.h/2-6, 9, 8);
+      g.fillStyle = '#b45309'; g.beginPath(); g.roundRect(-b.w/2, -b.h/2, b.w, b.h-4, 12); g.fill();
+      g.fillStyle = '#fef3c7';
+      g.beginPath(); g.moveTo(b.w/2-8, -b.h/2+6); g.lineTo(b.w/2+12, -b.h/2-8); g.lineTo(b.w/2-16, -b.h/2-1); g.fill();
+      g.beginPath(); g.arc(b.w/2-12, -4, 5, 0, 7); g.fill();
+      g.fillStyle = '#111'; g.beginPath(); g.arc(b.w/2-10, -4, 2.5, 0, 7); g.fill();
+      g.fillStyle = '#f472b6'; g.beginPath(); g.arc(b.w/2-3, 5, 3, 0, 7); g.fill();
+      g.restore();
+      if(!charging && Math.floor(b.t*10)%2 === 0){ g.fillStyle = '#ff3b5c'; g.font = 'bold 34px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('!', b.x + b.w/2, GROUND - b.h - 14); }
+      if(charging && b.fall === 0){ g.fillStyle = 'rgba(255,255,255,.35)'; for(let k=1;k<4;k++) g.fillRect(b.x + b.w/2 - b.dir*(b.w/2 + k*16), GROUND-8-k*3, 10, 3); }
+    }
+    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('JUMP THE BULLS! The ring shrinks.', W/2, 112); }
+  }
+  if(dm === 43){                                                     // BLACKOUT
+    const el = ROUND_TIME - timer, R = 230 - Math.min(80, el*2.7);
+    const pcx = player.x + player.w/2, pcy = player.y + player.h/2;
+    if(dark.flash > 0){ g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(0, 0, W, H); }
+    else {
+      const gr = g.createRadialGradient(pcx, pcy, R*0.45, pcx, pcy, R);
+      gr.addColorStop(0, 'rgba(5,2,20,0)'); gr.addColorStop(1, 'rgba(5,2,20,0.97)');
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      for(const b of boulders){
+        const near = Math.hypot(b.x - pcx, b.y - pcy) < R*1.6;
+        g.globalAlpha = near ? 1 : 0.28;
+        g.fillStyle = 'rgba(255,59,48,.4)'; g.beginPath(); g.arc(b.x-7, b.y-4, 7, 0, 7); g.arc(b.x+7, b.y-4, 7, 0, 7); g.fill();
+        g.fillStyle = '#ff3b30'; g.beginPath(); g.arc(b.x-7, b.y-4, 3.5, 0, 7); g.arc(b.x+7, b.y-4, 3.5, 0, 7); g.fill();
+        g.globalAlpha = 1;
+      }
+    }
+    if(state === 'play' && el < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('LIGHTS OUT! Watch for red eyes.', W/2, 112); }
+  }
+  if(dm === 44){                                                     // CHAOS FINALE
+    for(const mt of fin.meteors) drawMeteorFx(mt);
+    for(const L of fin.lasers) drawLaserFx(L);
+    if(state === 'play' && ROUND_TIME - timer < 3){ g.fillStyle = '#fff'; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'center'; g.fillText('EVERYTHING AT ONCE!', W/2, 112); }
   }
   if(dm === 20){                                                     // GRAVITY FLIP
     g.fillStyle = '#1b0a3d'; g.fillRect(0, 0, W, CEIL); g.fillStyle = C.floorTop; g.fillRect(0, CEIL-4, W, 4);
@@ -1229,7 +1391,7 @@ function draw(){
       g.restore();
     }
   }
-  if(mode() === 2 || mode() === 44){
+  if(mode() === 2){
     for(const L of lasers){
       if(L.t < 0) continue;
       const [y0,y1] = beamY(L.type), mid = (y0+y1)/2;
@@ -1282,7 +1444,7 @@ function draw(){
   g.fillStyle = C.text; g.font = 'bold 26px "Trebuchet MS",sans-serif'; g.textAlign = 'left';
   g.fillText('LV'+level+'  '+cname(challenge,level), 18, 36);
   g.textAlign = 'right';
-  g.fillStyle = C.floorTop; g.fillText(Math.ceil(timer)+'s', W-18, 36);
+  g.fillStyle = C.floorTop; g.fillText(mode() === 41 ? 'ROUND '+Math.min(simSeq.length, SIM_ROUNDS)+'/'+SIM_ROUNDS : Math.ceil(timer)+'s', W-18, 36);
   g.font = '18px "Trebuchet MS",sans-serif'; g.fillStyle = C.text;
   g.fillText('Wins: '+best, W-18, 62);
   if(state === 'play') drawPauseBtn();
